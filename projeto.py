@@ -96,7 +96,7 @@ def variacaoUmidade(arqui):
     plt.show()
 
 # FUNÇÃO TRÊS
-def juncao_Temp_E_Umidade(arqui):
+def juncao_Temp_Umidade_Orvalho_Vento(arqui):
     # Carregar dados
     df = pd.read_csv(arqui, sep=";", decimal=",")
     # Substituir vírgulas por pontos e converter colunas numéricas
@@ -172,7 +172,63 @@ def juncao_Temp_E_Umidade(arqui):
     plt.tight_layout()
     plt.show()
 
+def analisar_radiacao_e_energia(arquivo, area_painel, eficiencia):
+    # Leitura do arquivo com separador ponto e vírgula
+    df = pd.read_csv(arquivo, sep=';', encoding='utf-8')
+    df = df.replace(',', '.', regex=True)
 
-variacaoTempPorDia('dados_limpos.csv')
-variacaoUmidade('dados_limpos.csv')
-juncao_Temp_E_Umidade('dados_limpos.csv')
+    # Converter colunas relevantes
+    df['Radiacao (KJ/m²)'] = pd.to_numeric(df['Radiacao (KJ/m²)'], errors='coerce')
+    df['Radiacao (kWh/m²)'] = df['Radiacao (KJ/m²)'] * 0.0002778
+
+    # Preparar datas
+    df['Data'] = df['Data'].astype(str)
+    df['Hora (UTC)'] = df['Hora (UTC)'].astype(str).str.zfill(4)
+    df['Data_Hora'] = pd.to_datetime(df['Data'] + ' ' + df['Hora (UTC)'], format='%d/%m/%Y %H%M', errors='coerce')
+    df['Dia'] = df['Data_Hora'].dt.day
+
+    # Agrupamentos
+    media_radiacao = df.groupby('Dia')['Radiacao (KJ/m²)'].mean()
+    df_diario = df.groupby('Dia')['Radiacao (kWh/m²)'].sum().reset_index()
+
+    # Cálculo da energia gerada
+    df_diario['Energia Gerada (kWh/dia)'] = df_diario['Radiacao (kWh/m²)'] * area_painel * eficiencia
+
+    # --- GRÁFICO UNIFICADO COM DOIS EIXOS ---
+    fig, ax1 = plt.subplots(figsize=(12, 6))
+
+    ax1.plot(media_radiacao.index, media_radiacao.values, color='orange', linewidth=2, label='Radiação Média (kJ/m²)')
+    ax1.set_title('Radiação Solar e Energia Gerada por Dia', fontsize=16)
+    ax1.set_xlabel('Dia do Mês')
+    ax1.set_ylabel('Radiação Média (kJ/m²)', color='orange')
+    ax1.tick_params(axis='y', labelcolor='orange')
+
+    ax2 = ax1.twinx()
+    ax2.plot(df_diario['Dia'], df_diario['Energia Gerada (kWh/dia)'], color='green', linewidth=2, label='Energia Gerada (kWh/dia)')
+    ax2.set_ylabel('Energia Gerada (kWh/dia)', color='green')
+    ax2.tick_params(axis='y', labelcolor='green')
+
+    plt.xticks(range(1, 32))
+    fig.tight_layout()
+    fig.legend(loc='upper left', bbox_to_anchor=(0.4, 0.9), fontsize=12)
+    plt.grid(True)
+    plt.show()
+
+    # Exibir tabela resumo
+    print(df_diario[['Dia', 'Energia Gerada (kWh/dia)']])
+
+
+# Parâmetros
+arqui = 'dados_limpos.csv'
+area_painel = 20  # Área dos painéis solares em m²
+eficiencia = 0.80  # Eficiência do sistema
+
+# Chamada da função
+
+variacaoTempPorDia(arqui)
+variacaoUmidade(arqui)
+# Junção da temperatu, umidade, Pto Orvalho e vento
+juncao_Temp_Umidade_Orvalho_Vento(arqui)
+
+# Extra, analise da radição e geração de energia 
+analisar_radiacao_e_energia(arqui, area_painel, eficiencia)
